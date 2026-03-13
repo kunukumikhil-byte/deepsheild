@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepShield — AI Deepfake Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030a0f;
+    --surface: #070f17;
+    --panel: #0a1520;
+    --border: #0f2d44;
+    --accent: #00d4ff;
+    --accent2: #ff2d55;
+    --accent3: #00ff88;
+    --warn: #ff9500;
+    --text: #c8e6f5;
+    --muted: #3a6070;
+    --glow: 0 0 20px rgba(0,212,255,0.3);
+    --glow-red: 0 0 20px rgba(255,45,85,0.4);
+    --glow-green: 0 0 20px rgba(0,255,136,0.3);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none; z-index:0;
+  }
+
+  .scanline {
+    position:fixed; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg,transparent,rgba(0,212,255,0.4),transparent);
+    animation:scan 4s linear infinite; z-index:1; pointer-events:none;
+  }
+  @keyframes scan { 0%{top:0;opacity:1} 100%{top:100vh;opacity:0.2} }
+
+  .container { position:relative; z-index:2; max-width:1000px; margin:0 auto; padding:20px; }
+
+  /* ── Header ── */
+  header { text-align:center; padding:40px 0 30px; }
+
+  .logo-badge {
+    display:inline-flex; align-items:center; gap:10px;
+    background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(0,212,255,0.05));
+    border:1px solid var(--accent); border-radius:4px;
+    padding:6px 16px; margin-bottom:16px;
+    font-family:'Share Tech Mono',monospace; font-size:11px;
+    color:var(--accent); letter-spacing:3px;
+    animation:pulse-border 3s ease-in-out infinite;
+  }
+  @keyframes pulse-border {
+    0%,100%{box-shadow:0 0 10px rgba(0,212,255,0.2)}
+    50%{box-shadow:0 0 25px rgba(0,212,255,0.5)}
+  }
+
+  .dot { width:6px;height:6px;background:var(--accent3);border-radius:50%;animation:blink 1s ease-in-out infinite; }
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+
+  .free-badge {
+    display:inline-block; background:linear-gradient(135deg,rgba(0,255,136,0.15),rgba(0,255,136,0.05));
+    border:1px solid var(--accent3); border-radius:20px;
+    padding:3px 12px; margin-bottom:12px;
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    color:var(--accent3); letter-spacing:2px;
+  }
+
+  h1 {
+    font-family:'Orbitron',sans-serif;
+    font-size:clamp(2rem,5vw,3.5rem); font-weight:900; letter-spacing:4px;
+    background:linear-gradient(135deg,#fff 0%,var(--accent) 50%,#0090b8 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    filter:drop-shadow(0 0 30px rgba(0,212,255,0.5));
+  }
+
+  .subtitle { font-family:'Share Tech Mono',monospace; color:var(--muted); font-size:12px; letter-spacing:4px; margin-top:8px; }
+
+  .stats-bar { display:flex; justify-content:center; gap:30px; margin:20px 0; flex-wrap:wrap; }
+  .stat { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .stat span { color:var(--accent3); font-weight:bold; }
+  #serverStatus { transition:color 0.3s; }
+
+  /* ── API Key Banner ── */
+  .api-banner {
+    background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2);
+    border-radius:8px; padding:16px 20px; margin-bottom:24px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .api-banner-icon { font-size:24px; }
+  .api-banner-text { flex:1; min-width:200px; }
+  .api-banner-text h4 { font-family:'Orbitron',sans-serif; font-size:11px; letter-spacing:2px; color:var(--accent); margin-bottom:4px; }
+  .api-banner-text p { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted); line-height:1.6; }
+  .api-banner-text a { color:var(--accent3); text-decoration:none; }
+  .api-banner-text a:hover { text-decoration:underline; }
+
+  /* ── Card ── */
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; padding:32px; position:relative; overflow:hidden;
+  }
+  .card::before {
+    content:''; position:absolute; top:0;left:0;right:0; height:2px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  }
+  .corner{position:absolute;width:16px;height:16px;border-color:var(--accent);border-style:solid;opacity:0.6}
+  .corner.tl{top:8px;left:8px;border-width:2px 0 0 2px}
+  .corner.tr{top:8px;right:8px;border-width:2px 2px 0 0}
+  .corner.bl{bottom:8px;left:8px;border-width:0 0 2px 2px}
+  .corner.br{bottom:8px;right:8px;border-width:0 2px 2px 0}
+
+  /* ── Upload ── */
+  .upload-zone {
+    border:2px dashed var(--border); border-radius:6px;
+    padding:50px 30px; text-align:center; cursor:pointer;
+    transition:all 0.3s; background:rgba(0,212,255,0.01);
+  }
+  .upload-zone:hover,.upload-zone.drag-over {
+    border-color:var(--accent); background:rgba(0,212,255,0.05); box-shadow:var(--glow);
+  }
+  .upload-icon{font-size:48px;margin-bottom:16px;filter:drop-shadow(0 0 10px rgba(0,212,255,0.4))}
+  .upload-zone h3{font-family:'Orbitron',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:8px}
+  .upload-zone p{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted)}
+  #fileInput{display:none}
+
+  /* ── Preview ── */
+  #previewContainer{display:none;position:relative;border-radius:6px;overflow:hidden;background:#000}
+  #previewImg{width:100%;max-height:400px;object-fit:contain;display:block}
+  .img-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 60%,rgba(3,10,15,0.9));pointer-events:none}
+  .scan-line-anim{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:imgScan 2s linear infinite;display:none}
+  @keyframes imgScan{0%{top:0}100%{top:100%}}
+  .img-label{position:absolute;top:12px;left:12px;background:rgba(3,10,15,0.85);border:1px solid var(--accent);border-radius:4px;padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:2px}
+  .change-btn{position:absolute;top:12px;right:12px;background:rgba(3,10,15,0.85);border:1px solid var(--muted);border-radius:4px;padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);cursor:pointer;letter-spacing:1px;transition:all 0.2s}
+  .change-btn:hover{color:var(--accent);border-color:var(--accent)}
+  .file-info{display:none;margin-top:10px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:5px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted)}
+
+  /* ── Source ── */
+  .source-section{margin-top:24px;padding:20px;background:var(--panel);border:1px solid var(--border);border-radius:6px}
+  .section-label{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:3px;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+  .source-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+  .source-btn{background:rgba(0,212,255,0.04);border:1px solid var(--border);border-radius:5px;padding:10px;cursor:pointer;text-align:center;transition:all 0.25s;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:0.5px}
+  .source-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,0.08)}
+  .source-btn.selected{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,0.1);box-shadow:var(--glow)}
+  .source-btn .icon{font-size:20px;margin-bottom:4px;display:block}
+  .other-input{width:100%;background:rgba(0,212,255,0.03);border:1px solid var(--border);border-radius:5px;padding:10px 14px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:14px;outline:none;transition:border-color 0.2s;display:none}
+  .other-input:focus{border-color:var(--accent)}
+  .other-input::placeholder{color:var(--muted)}
+
+  /* ── Analyze Btn ── */
+  .analyze-btn{width:100%;margin-top:24px;padding:16px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(0,212,255,0.05));border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:4px;cursor:pointer;transition:all 0.3s;position:relative;overflow:hidden;box-shadow:var(--glow)}
+  .analyze-btn:hover:not(:disabled){background:linear-gradient(135deg,rgba(0,212,255,0.25),rgba(0,212,255,0.1));box-shadow:0 0 35px rgba(0,212,255,0.5);transform:translateY(-1px)}
+  .analyze-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+  .btn-shine{position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent);animation:shine 2.5s ease-in-out infinite}
+  @keyframes shine{0%{left:-100%}100%{left:200%}}
+
+  /* ── Analyzing ── */
+  .analyzing-state{display:none;text-align:center;padding:30px}
+  .analyzing-ring{width:70px;height:70px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);border-right-color:var(--accent);animation:spin 0.8s linear infinite;margin:0 auto 20px;box-shadow:var(--glow)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .analyzing-text{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--accent);letter-spacing:3px;animation:textPulse 1.5s ease-in-out infinite}
+  @keyframes textPulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .progress-steps{margin:20px auto 0;display:flex;flex-direction:column;gap:8px;max-width:320px}
+  .step{display:flex;align-items:center;gap:10px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted);opacity:0;transform:translateX(-10px);transition:all 0.4s}
+  .step.active{opacity:1;transform:translateX(0);color:var(--text)}
+  .step.done{opacity:0.5}
+  .step-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0}
+  .step.active .step-dot{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .step.done .step-dot{background:var(--accent3)}
+
+  /* ── Results ── */
+  #results{display:none;margin-top:24px;animation:fadeInUp 0.5s ease}
+  @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+  .meta-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+  .meta-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,0.06);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted)}
+
+  .threat-badge{padding:3px 10px;border-radius:3px;font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px}
+  .threat-LOW{background:rgba(0,255,136,0.1);color:var(--accent3);border:1px solid var(--accent3)}
+  .threat-MEDIUM{background:rgba(255,149,0,0.1);color:var(--warn);border:1px solid var(--warn)}
+  .threat-HIGH{background:rgba(255,45,85,0.1);color:var(--accent2);border:1px solid var(--accent2)}
+  .threat-CRITICAL{background:rgba(255,45,85,0.2);color:#ff0000;border:1px solid #ff0000;animation:pulse-border 1s ease-in-out infinite}
+
+  .verdict-banner{padding:20px 24px;border-radius:6px;border:2px solid;margin-bottom:20px}
+  .verdict-banner.real{border-color:var(--accent3);background:rgba(0,255,136,0.05);box-shadow:var(--glow-green)}
+  .verdict-banner.fake{border-color:var(--accent2);background:rgba(255,45,85,0.05);box-shadow:var(--glow-red)}
+  .verdict-banner.uncertain{border-color:var(--warn);background:rgba(255,149,0,0.05);box-shadow:0 0 20px rgba(255,149,0,0.3)}
+  .verdict-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .verdict-label{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:3px;opacity:0.7}
+  .verdict-text{font-family:'Orbitron',sans-serif;font-size:clamp(1.4rem,3vw,2rem);font-weight:900;letter-spacing:3px}
+  .real .verdict-text{color:var(--accent3)}.fake .verdict-text{color:var(--accent2)}.uncertain .verdict-text{color:var(--warn)}
+  .dual-bar{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
+  .conf-label{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
+  .conf-bar{height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden}
+  .conf-fill{height:100%;border-radius:3px;transition:width 1s cubic-bezier(0.4,0,0.2,1);width:0}
+  .real .conf-fill{background:linear-gradient(90deg,var(--accent3),#00b862)}
+  .fake .conf-fill{background:linear-gradient(90deg,var(--accent2),#c0003f)}
+  .uncertain .conf-fill{background:linear-gradient(90deg,var(--warn),#c07000)}
+  .auth-fill{height:100%;border-radius:3px;transition:width 1s cubic-bezier(0.4,0,0.2,1) 0.2s;width:0;background:linear-gradient(90deg,#557788,#99bbcc)}
+
+  .warning-box{background:rgba(255,149,0,0.07);border:1px solid rgba(255,149,0,0.3);border-radius:6px;padding:16px 20px;margin-bottom:20px;display:none}
+  .warning-box.visible{display:block}
+  .warning-title{font-family:'Orbitron',sans-serif;font-size:11px;color:var(--warn);letter-spacing:2px;margin-bottom:8px}
+  .warning-box p{font-size:14px;line-height:1.6;color:#c8a060}
+
+  .manip-box{background:rgba(255,45,85,0.05);border:1px solid rgba(255,45,85,0.2);border-radius:6px;padding:16px 20px;margin-bottom:20px;display:none}
+  .manip-box.visible{display:block}
+  .manip-title{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2);letter-spacing:2px;margin-bottom:10px}
+  .manip-tags{display:flex;flex-wrap:wrap;gap:6px}
+  .manip-tag{background:rgba(255,45,85,0.1);border:1px solid rgba(255,45,85,0.3);border-radius:3px;padding:3px 8px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2)}
+
+  .analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  @media(max-width:600px){.analysis-grid{grid-template-columns:1fr}.dual-bar{grid-template-columns:1fr}}
+  .analysis-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px}
+  .analysis-card h4{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:2px;margin-bottom:10px}
+  .analysis-card p{font-size:13px;line-height:1.6;color:#8ab0c0}
+  .indicator-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .indicator-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .dot-red{background:var(--accent2);box-shadow:0 0 6px var(--accent2)}
+  .dot-green{background:var(--accent3);box-shadow:0 0 6px var(--accent3)}
+  .dot-yellow{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+  .indicator-text{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text)}
+  .indicator-cat{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--muted);margin-left:auto;white-space:nowrap}
+
+  .detail-section{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:20px;margin-bottom:20px}
+  .detail-section h3{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:3px;color:var(--accent);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .detail-section p{font-size:14px;line-height:1.8;color:#8ab0c0}
+
+  .reset-btn{width:100%;padding:12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:3px;cursor:pointer;transition:all 0.2s;margin-top:8px}
+  .reset-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  .error-box{background:rgba(255,45,85,0.07);border:1px solid rgba(255,45,85,0.3);border-radius:6px;padding:16px 20px;display:none;text-align:center;margin-top:16px}
+  .error-box.visible{display:block}
+  .error-box p{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--accent2);letter-spacing:1px}
+
+  footer{text-align:center;padding:30px 0;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px}
+  footer span{color:var(--accent2)}
+  footer .free{color:var(--accent3)}
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<div class="container">
+  <header>
+    <div class="free-badge">✦ POWERED BY GOOGLE GEMINI — 100% FREE ✦</div>
+    <div class="logo-badge">
+      <div class="dot"></div>
+      FORENSIC AI ENGINE v2.4
+      <div class="dot"></div>
+    </div>
+    <h1>DEEPSHIELD</h1>
+    <div class="subtitle">// AI-POWERED DEEPFAKE DETECTION SYSTEM //</div>
+    <div class="stats-bar">
+      <div class="stat">MODEL <span>Gemini 1.5 Flash</span></div>
+      <div class="stat">BACKEND <span>Python / Flask</span></div>
+      <div class="stat">COST <span>FREE</span></div>
+      <div class="stat">SERVER <span id="serverStatus">CHECKING...</span></div>
+    </div>
+  </header>
+
+  <!-- API Key Guide Banner -->
+  <div class="api-banner">
+    <div class="api-banner-icon">🔑</div>
+    <div class="api-banner-text">
+      <h4>GET YOUR FREE GEMINI API KEY</h4>
+      <p>
+        1. Go to <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a> → Sign in with Google → Click <strong>"Create API Key"</strong><br>
+        2. Copy the key &amp; run: <strong>export GEMINI_API_KEY="your-key-here"</strong><br>
+        3. Then start the server: <strong>python app.py</strong> → Open <strong>http://localhost:5000</strong>
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+
+    <!-- Upload -->
+    <div id="uploadZone" class="upload-zone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">🔍</div>
+      <h3>DROP IMAGE FOR ANALYSIS</h3>
+      <p>Drag &amp; drop or click to select · PNG, JPG, WEBP · Max 10MB</p>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <!-- Preview -->
+    <div id="previewContainer">
+      <img id="previewImg" alt="Uploaded image">
+      <div class="img-overlay"></div>
+      <div class="scan-line-anim" id="scanAnim"></div>
+      <div class="img-label">◉ IMAGE LOADED</div>
+      <button class="change-btn" onclick="resetAll()">✕ CHANGE</button>
+    </div>
+
+    <div class="file-info" id="fileInfo"></div>
+
+    <!-- Source -->
+    <div class="source-section" id="sourceSection" style="display:none">
+      <div class="section-label">WHERE DID YOU GET THIS IMAGE?</div>
+      <div class="source-grid">
+        <button class="source-btn" onclick="selectSource(this,'Social Media')"><span class="icon">📱</span>Social Media</button>
+        <button class="source-btn" onclick="selectSource(this,'News Website')"><span class="icon">📰</span>News Website</button>
+        <button class="source-btn" onclick="selectSource(this,'Messaging App')"><span class="icon">💬</span>Messaging App</button>
+        <button class="source-btn" onclick="selectSource(this,'Email/Forwarded')"><span class="icon">📧</span>Email / Forwarded</button>
+        <button class="source-btn" onclick="selectSource(this,'Personal Photo')"><span class="icon">🖼️</span>Personal Photo</button>
+        <button class="source-btn" onclick="selectSource(this,'Other')"><span class="icon">🔗</span>Other</button>
+      </div>
+      <input type="text" class="other-input" id="otherInput" placeholder="Describe where you found this image...">
+    </div>
+
+    <!-- Analyze -->
+    <button class="analyze-btn" id="analyzeBtn" disabled onclick="analyzeImage()">
+      <div class="btn-shine"></div>
+      ⬡ INITIATE FORENSIC ANALYSIS
+    </button>
+
+    <!-- Analyzing State -->
+    <div class="analyzing-state" id="analyzingState">
+      <div class="analyzing-ring"></div>
+      <div class="analyzing-text">GEMINI ANALYZING IMAGE...</div>
+      <div class="progress-steps">
+        <div class="step" id="step1"><div class="step-dot"></div>Uploading image to Flask server</div>
+        <div class="step" id="step2"><div class="step-dot"></div>Sending to Gemini Vision API</div>
+        <div class="step" id="step3"><div class="step-dot"></div>Scanning facial landmarks</div>
+        <div class="step" id="step4"><div class="step-dot"></div>Checking GAN fingerprints</div>
+        <div class="step" id="step5"><div class="step-dot"></div>Analyzing compression artifacts</div>
+        <div class="step" id="step6"><div class="step-dot"></div>Generating forensic report</div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="errorBox"><p id="errorMsg"></p></div>
+
+    <!-- Results -->
+    <div id="results">
+      <div class="meta-row" id="metaRow"></div>
+
+      <div class="verdict-banner" id="verdictBanner">
+        <div class="verdict-header">
+          <div class="verdict-label">FORENSIC VERDICT</div>
+          <div class="verdict-text" id="verdictText"></div>
+        </div>
+        <div class="dual-bar">
+          <div>
+            <div class="conf-label"><span>CONFIDENCE</span><span id="confPercent">—</span></div>
+            <div class="conf-bar"><div class="conf-fill" id="confFill"></div></div>
+          </div>
+          <div>
+            <div class="conf-label"><span>AUTHENTICITY SCORE</span><span id="authPercent">—</span></div>
+            <div class="conf-bar"><div class="auth-fill" id="authFill"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="warning-box" id="warningBox">
+        <div class="warning-title">⚠ THREAT ADVISORY</div>
+        <p id="warningText"></p>
+      </div>
+
+      <div class="manip-box" id="manipBox">
+        <div class="manip-title">◉ DETECTED MANIPULATION TECHNIQUES</div>
+        <div class="manip-tags" id="manipTags"></div>
+      </div>
+
+      <div class="analysis-grid" id="analysisGrid"></div>
+
+      <div class="detail-section">
+        <h3>◈ FULL FORENSIC REPORT</h3>
+        <p id="detailReport"></p>
+      </div>
+
+      <button class="reset-btn" onclick="resetAll()">⟳ ANALYZE ANOTHER IMAGE</button>
+    </div>
+  </div>
+
+  <footer>
+    DEEPSHIELD — <span>FORENSIC AI</span> — FLASK + <span class="free">GEMINI (FREE)</span><br>
+    <span style="color:var(--muted);font-size:9px">FOR EDUCATIONAL &amp; RESEARCH PURPOSES ONLY</span>
+  </footer>
+</div>
+
+<script>
+  let selectedFile = null;
+  let selectedSource = null;
+
+  // Server health check
+  async function checkServer() {
+    try {
+      const r = await fetch('/health');
+      if (r.ok) {
+        const data = await r.json();
+        const el = document.getElementById('serverStatus');
+        if (data.api_configured) {
+          el.textContent = 'ONLINE';
+          el.style.color = 'var(--accent3)';
+        } else {
+          el.textContent = 'NO API KEY';
+          el.style.color = 'var(--warn)';
+        }
+      } else { throw new Error(); }
+    } catch {
+      const el = document.getElementById('serverStatus');
+      el.textContent = 'OFFLINE';
+      el.style.color = 'var(--accent2)';
+    }
+  }
+  checkServer();
+
+  // Drag & drop
+  const uploadZone = document.getElementById('uploadZone');
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault(); uploadZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) handleFile(f);
+  });
+  document.getElementById('fileInput').addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(file) {
+    selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('previewImg').src = e.target.result;
+      document.getElementById('uploadZone').style.display = 'none';
+      document.getElementById('previewContainer').style.display = 'block';
+      document.getElementById('sourceSection').style.display = 'block';
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('errorBox').classList.remove('visible');
+      const fi = document.getElementById('fileInfo');
+      fi.style.display = 'block';
+      fi.textContent = `📁 ${file.name}  ·  ${(file.size/1024).toFixed(1)} KB  ·  ${file.type}`;
+      checkReady();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function selectSource(btn, source) {
+    document.querySelectorAll('.source-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedSource = source;
+    document.getElementById('otherInput').style.display = source === 'Other' ? 'block' : 'none';
+    checkReady();
+  }
+
+  function checkReady() {
+    document.getElementById('analyzeBtn').disabled = !(selectedFile && selectedSource);
+  }
+
+  async function analyzeImage() {
+    const source = selectedSource === 'Other'
+      ? (document.getElementById('otherInput').value.trim() || 'Other/Unknown')
+      : selectedSource;
+
+    document.getElementById('analyzeBtn').style.display = 'none';
+    document.getElementById('analyzingState').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('errorBox').classList.remove('visible');
+    document.getElementById('scanAnim').style.display = 'block';
+
+    const steps = ['step1','step2','step3','step4','step5','step6'];
+    let idx = 0;
+    const iv = setInterval(() => {
+      if (idx > 0) document.getElementById(steps[idx-1]).classList.remove('active');
+      if (idx < steps.length) { document.getElementById(steps[idx]).classList.add('active'); idx++; }
+    }, 700);
+
+    try {
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+      formData.append('source', source);
+
+      const response = await fetch('/analyze', { method:'POST', body:formData });
+
+      clearInterval(iv);
+      steps.forEach(s => { document.getElementById(s).classList.add('done'); document.getElementById(s).classList.remove('active'); });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || `Server error ${response.status}`);
+      }
+
+      const result = await response.json();
+      await new Promise(r => setTimeout(r, 400));
+      document.getElementById('scanAnim').style.display = 'none';
+      showResults(result, source);
+
+    } catch (err) {
+      clearInterval(iv);
+      document.getElementById('scanAnim').style.display = 'none';
+      document.getElementById('analyzingState').style.display = 'none';
+      document.getElementById('analyzeBtn').style.display = 'block';
+      document.getElementById('errorMsg').textContent = `Error: ${err.message}`;
+      document.getElementById('errorBox').classList.add('visible');
+    }
+  }
+
+  function showResults(r, source) {
+    document.getElementById('analyzingState').style.display = 'none';
+    document.getElementById('analyzeBtn').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+
+    const threatClass = `threat-${r.threat_level || 'MEDIUM'}`;
+    document.getElementById('metaRow').innerHTML = `
+      <div class="meta-badge">📍 ${source.toUpperCase()}</div>
+      <div class="meta-badge">📦 ${r.file_size_kb || '—'} KB</div>
+      <div class="meta-badge">🤖 ${r.model_used || 'gemini-1.5-flash'}</div>
+      <div class="meta-badge">🕐 ${r.analyzed_at ? new Date(r.analyzed_at).toLocaleTimeString() : '—'}</div>
+      <div class="threat-badge ${threatClass}">THREAT: ${r.threat_level || '—'}</div>
+    `;
+
+    const banner = document.getElementById('verdictBanner');
+    banner.className = 'verdict-banner';
+    const v = r.verdict;
+    if (v === 'DEEPFAKE') banner.classList.add('fake');
+    else if (v === 'AUTHENTIC') banner.classList.add('real');
+    else banner.classList.add('uncertain');
+    document.getElementById('verdictText').textContent = v;
+
+    const conf = Math.min(100, Math.max(0, parseInt(r.confidence) || 70));
+    const auth = Math.min(100, Math.max(0, parseInt(r.authenticity_score) || 50));
+    document.getElementById('confPercent').textContent = conf + '%';
+    document.getElementById('authPercent').textContent = auth + '%';
+    setTimeout(() => {
+      document.getElementById('confFill').style.width = conf + '%';
+      document.getElementById('authFill').style.width = auth + '%';
+    }, 100);
+
+    const wb = document.getElementById('warningBox');
+    if (r.warning && r.warning.trim()) {
+      wb.classList.add('visible');
+      document.getElementById('warningText').textContent = r.warning;
+    } else { wb.classList.remove('visible'); }
+
+    const mb = document.getElementById('manipBox');
+    if (r.detected_manipulations && r.detected_manipulations.length) {
+      mb.classList.add('visible');
+      document.getElementById('manipTags').innerHTML =
+        r.detected_manipulations.map(m => `<span class="manip-tag">${m}</span>`).join('');
+    } else { mb.classList.remove('visible'); }
+
+    document.getElementById('analysisGrid').innerHTML = `
+      <div class="analysis-card">
+        <h4>◈ DETECTION INDICATORS</h4>
+        ${(r.indicators || []).map(ind => `
+          <div class="indicator-row">
+            <div class="indicator-dot ${ind.type==='red'?'dot-red':ind.type==='green'?'dot-green':'dot-yellow'}"></div>
+            <span class="indicator-text">${ind.text}</span>
+            ${ind.category?`<span class="indicator-cat">[${ind.category}]</span>`:''}
+          </div>`).join('')}
+      </div>
+      <div class="analysis-card">
+        <h4>◈ SOURCE RISK</h4>
+        <p>${r.source_risk || '—'}</p>
+        <br>
+        <h4 style="margin-top:8px">◈ RECOMMENDATION</h4>
+        <p>${r.recommendation || '—'}</p>
+      </div>
+    `;
+
+    document.getElementById('detailReport').innerHTML =
+      `<strong style="color:var(--accent)">OVERVIEW:</strong> ${r.overview||''}<br><br>` +
+      `<strong style="color:var(--accent)">FACIAL / SUBJECT ANALYSIS:</strong> ${r.facial_analysis||''}<br><br>` +
+      `<strong style="color:var(--accent)">TECHNICAL ARTIFACTS:</strong> ${r.technical_analysis||''}`;
+
+    document.getElementById('results').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function resetAll() {
+    selectedFile = null; selectedSource = null;
+    document.getElementById('uploadZone').style.display = 'block';
+    document.getElementById('previewContainer').style.display = 'none';
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('sourceSection').style.display = 'none';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('analyzingState').style.display = 'none';
+    document.getElementById('analyzeBtn').style.display = 'block';
+    document.getElementById('analyzeBtn').disabled = true;
+    document.getElementById('errorBox').classList.remove('visible');
+    document.getElementById('fileInput').value = '';
+    document.getElementById('otherInput').style.display = 'none';
+    document.getElementById('otherInput').value = '';
+    document.querySelectorAll('.source-btn').forEach(b => b.classList.remove('selected'));
+    ['step1','step2','step3','step4','step5','step6'].forEach(s => {
+      document.getElementById(s).classList.remove('active','done');
+    });
+    window.scrollTo({ top:0, behavior:'smooth' });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+flask
+flask-cors
+transformers
+torch
+pillow
+opencv-python
+numpy
+requests
+gunicorn
